@@ -1,0 +1,11 @@
+{
+  "name": "Cliente Inventato",
+  "address": "Via Roma 1, 00100 Roma",
+  "tax_code": "RSSMRA85M01H501Z",
+  "vat": "IT12345678901",
+  "phone": "0612345678",
+  "email": "cliente@esempio.com",
+  "sector": "Commercio",
+  "legal_rep": "Mario Rossi",
+  "legal_rep_tax_code": "RSSMRA85M01H501Z"
+}

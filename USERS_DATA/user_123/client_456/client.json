@@ -1,0 +1,11 @@
+{
+  "name": "Cliente Placeholder",
+  "address": "string",
+  "tax_code": "string",
+  "vat": "string",
+  "phone": "string",
+  "email": "string",
+  "sector": "string",
+  "legal_rep": "string",
+  "legal_rep_tax_code": "string"
+}

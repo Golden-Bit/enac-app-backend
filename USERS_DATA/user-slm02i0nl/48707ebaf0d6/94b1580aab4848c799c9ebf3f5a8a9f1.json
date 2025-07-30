@@ -1,0 +1,62 @@
+{
+  "Identificativi": {
+    "Tipo": "",
+    "TpCar": null,
+    "Ramo": "",
+    "Compagnia": "",
+    "NumeroPolizza": ""
+  },
+  "UnitaVendita": {
+    "PuntoVendita": "",
+    "PuntoVendita2": "",
+    "Account": "",
+    "Intermediario": ""
+  },
+  "Amministrativi": {
+    "Effetto": "2025-07-28",
+    "DataEmissione": "2025-07-28",
+    "UltRataPagata": "2025-07-28",
+    "Frazionamento": "Annuale",
+    "CompresoFirma": false,
+    "Scadenza": "2026-07-28",
+    "ScadenzaOriginaria": "2026-07-28",
+    "ScadenzaMora": null,
+    "NumeroProposta": null,
+    "ModalitaIncasso": "Bonifico",
+    "CodConvenzione": null,
+    "ScadenzaVincolo": null,
+    "ScadenzaCopertura": null,
+    "FineCoperturaProroga": null
+  },
+  "Premi": {
+    "Premio": "0.00",
+    "Netto": "0.00",
+    "Accessori": "0.00",
+    "Diritti": "0.00",
+    "Imposte": "0.00",
+    "Spese": "0.00",
+    "Fondo": "0.00",
+    "Sconto": "0.00"
+  },
+  "Rinnovo": {
+    "Rinnovo": "",
+    "Disdetta": "",
+    "GiorniMora": "",
+    "Proroga": ""
+  },
+  "Operativita": {
+    "Regolazione": false,
+    "ParametriRegolazione": {
+      "Inizio": "2025-07-28",
+      "Fine": "2026-07-28",
+      "UltimaRegEmessa": null,
+      "GiorniInvioDati": null,
+      "GiorniPagReg": null,
+      "GiorniMoraRegolazione": null,
+      "CadenzaRegolazione": ""
+    }
+  },
+  "RamiEl": {
+    "Descrizione": "fdsfadsf"
+  }
+}
