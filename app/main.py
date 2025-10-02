@@ -9,6 +9,7 @@ def create_app() -> FastAPI:
         title="Omnia8 File-API",
         description="Utenti → Entità → Contratti → (Titoli, Sinistri, Documenti) con storage filesystem.",
         version="1.0.1",
+        root_path="/enac-api"
     )
     app.add_middleware(
         CORSMiddleware,
