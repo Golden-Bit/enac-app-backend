@@ -27,4 +27,8 @@ def search_by_policy(user_id: str, numero_polizza: str):
 
 @router.get("/users/{user_id}/dashboard/due", response_model=Dict[str, Any], summary="Scadenze contratti/titoli entro N giorni")
 def dashboard_due(user_id: str, days: int = 120):
-    return compute_due_indexes(user_id, days)
+
+    res = compute_due_indexes(user_id, days)
+    print(res)
+
+    return res

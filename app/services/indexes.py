@@ -66,42 +66,101 @@ def rebuild_entity_views(user_id: str, entity_id: str) -> None:
     atomic_write_json(vdir / "claims_index.json", claims)
 
 def compute_due_indexes(user_id: str, days: int = 120) -> Dict[str, Any]:
-    today = date.today(); limit = today + timedelta(days=days)
-    contracts_due: List[Dict[str, Any]] = []; titles_due: List[Dict[str, Any]] = []
-    for edir in entities_dir(user_id).iterdir():
-        if not edir.is_dir(): continue
-        for cdir in (edir / "contracts").iterdir():
-            if not cdir.is_dir(): continue
+    today = date.today()
+    limit = today + timedelta(days=days)
+
+    contracts_due: List[Dict[str, Any]] = []
+    titles_due: List[Dict[str, Any]] = []
+
+    # 0) Se l'area utente/entità non esiste, ritorna subito strutture vuote
+    base_entities: Path = entities_dir(user_id)
+    if not base_entities.exists():
+        return {"contracts_due": [], "titles_due": []}
+
+    # 1) Itera sulle entità
+    for edir in base_entities.iterdir():
+        if not edir.is_dir():
+            continue
+
+        # 2) Folder contratti opzionale
+        croot = edir / "contracts"
+        if not croot.exists():
+            continue
+
+        # 3) Itera sui contratti dell'entità (se esistono)
+        try:
+            cdirs = list(croot.iterdir())
+        except FileNotFoundError:
+            # La cartella è stata rimossa fra il check e l'iterazione
+            continue
+
+        for cdir in cdirs:
+            if not cdir.is_dir():
+                continue
+
+            # 3a) Scadenza contratto da contract.json
             cj = cdir / "contract.json"
             if cj.exists():
-                c = read_json(cj)
-                scad = c.get("Amministrativi", {}).get("Scadenza")
                 try:
-                    d = date.fromisoformat(scad)
-                    if today <= d <= limit:
-                        contracts_due.append({
-                            "entity_id": edir.name, "contract_id": cdir.name,
-                            "numero_polizza": c["Identificativi"]["NumeroPolizza"],
-                            "compagnia": c["Identificativi"]["Compagnia"],
-                            "scadenza": scad,
-                        })
+                    c = read_json(cj)  # può lanciare eccezioni
                 except Exception:
-                    pass
+                    c = None
+
+                if isinstance(c, dict):
+                    scad = (c.get("Amministrativi") or {}).get("Scadenza")
+                    if isinstance(scad, str) and scad:
+                        try:
+                            d = date.fromisoformat(scad)
+                            if today <= d <= limit:
+                                ident = (c.get("Identificativi") or {})
+                                contracts_due.append({
+                                    "entity_id":   edir.name,
+                                    "contract_id": cdir.name,
+                                    "numero_polizza": ident.get("NumeroPolizza"),
+                                    "compagnia":      ident.get("Compagnia"),
+                                    "scadenza":       scad,
+                                })
+                        except Exception:
+                            # data non ISO o non parsabile → ignora
+                            pass
+
+            # 3b) Scadenze titoli sotto il contratto (cartella opzionale)
             troot = cdir / "titles"
-            if troot.exists():
-                for tf in troot.rglob("*.json"):
-                    if tf.parent.name == "documents": continue
-                    t = read_json(tf); scadt = t.get("scadenza_titolo")
+            if not troot.exists():
+                continue
+
+            # Scansiona tutti i .json dei titoli (escludi metadati documenti)
+            try:
+                json_files = list(troot.rglob("*.json"))
+            except FileNotFoundError:
+                continue
+
+            for tf in json_files:
+                if tf.parent.name == "documents":
+                    continue
+                try:
+                    t = read_json(tf)
+                except Exception:
+                    continue
+                if not isinstance(t, dict):
+                    continue
+
+                scadt = t.get("scadenza_titolo")
+                if isinstance(scadt, str) and scadt:
                     try:
                         dt = date.fromisoformat(scadt)
                         if today <= dt <= limit:
                             titles_due.append({
-                                "entity_id": edir.name, "contract_id": cdir.name,
-                                "title_id": tf.stem, "scadenza_titolo": scadt,
-                                "stato": t.get("stato"), "premio": t.get("premio_lordo"),
+                                "entity_id":       edir.name,
+                                "contract_id":     cdir.name,
+                                "title_id":        tf.stem,
+                                "scadenza_titolo": scadt,
+                                "stato":           t.get("stato"),
+                                "premio":          t.get("premio_lordo"),
                             })
                     except Exception:
                         pass
+
     return {"contracts_due": contracts_due, "titles_due": titles_due}
 
 def iter_all_document_meta_files(user_id: str) -> list[Path]:
