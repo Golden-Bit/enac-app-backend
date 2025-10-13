@@ -1,4 +1,6 @@
+# app/utils/utils.py
 from __future__ import annotations
+
 import os
 import json
 import re
@@ -8,11 +10,27 @@ from pathlib import Path
 from typing import Any
 from fastapi import HTTPException
 
-from app.config import ALLOWED_ID_PATTERN, ROOT_DATA_DIR
+# =============================================================================
+# Config & modalità storage
+# =============================================================================
+from app.config import ALLOWED_ID_PATTERN, ROOT_DATA_DIR  # sempre richiesti
 
-# ============================================================================
+# Flag di modalità: prende da app.config.STORAGE_MODE se esiste,
+# altrimenti da env ENAC_STORAGE_MODE; default = "isolated".
+# Valori ammessi (case-insensitive): "isolated", "shared"
+try:
+    from app import config as _cfg  # type: ignore
+    _CFG_STORAGE_MODE = getattr(_cfg, "STORAGE_MODE", None)
+except Exception:
+    _CFG_STORAGE_MODE = None
+
+_STORAGE_MODE = (_CFG_STORAGE_MODE or os.getenv("ENAC_STORAGE_MODE", "isolated")).strip().lower()
+_IS_SHARED = _STORAGE_MODE in {"shared", "global", "multi", "all"}  # sinonimi permessi
+_SHARED_BUCKET_NAME = "_shared"  # nome cartella usata in modalità condivisa
+
+# =============================================================================
 # Validazione ID
-# ============================================================================
+# =============================================================================
 _ALLOWED_ID = re.compile(ALLOWED_ID_PATTERN)
 
 def sanitize_id(raw: str, what: str) -> str:
@@ -21,18 +39,18 @@ def sanitize_id(raw: str, what: str) -> str:
         raise HTTPException(status_code=400, detail=f"ID {what!r} non valido: usare [a-zA-Z0-9._-]")
     return s
 
-# ============================================================================
+# =============================================================================
 # FS helpers
-# ============================================================================
+# =============================================================================
 def ensure_dir(p: Path) -> Path:
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 def atomic_write_json(path: Path, obj: Any) -> None:
     """
-    Scrittura JSON atomica davvero robusta:
+    Scrittura JSON atomica robusta:
     - garantisce l'esistenza della cartella del file finale
-    - crea il tmp nella STESSA directory (compatibile con Windows)
+    - crea il tmp nella STESSA directory (ok anche su Windows)
     - sostituzione atomica con os.replace
     """
     parent = path.parent
@@ -52,11 +70,29 @@ def atomic_write_json(path: Path, obj: Any) -> None:
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text("utf-8"))
 
-# ============================================================================
-# Layout base  users/<user_id>/...
-# ============================================================================
+# =============================================================================
+# Risoluzione bucket per-utente vs condiviso
+# =============================================================================
+def _tenant_bucket(user_id: str) -> str:
+    """
+    Ritorna il nome della cartella radice per i dati dell'utente.
+    - In modalità 'shared' ritorna sempre '_shared'
+    - In modalità 'isolated' ritorna il sanitize(user_id)
+    """
+    return _SHARED_BUCKET_NAME if _IS_SHARED else sanitize_id(user_id, "user_id")
+
+def storage_mode() -> str:
+    """Esporta la modalità corrente ("isolated" oppure "shared") — utile per debug."""
+    return "shared" if _IS_SHARED else "isolated"
+
+# =============================================================================
+# Layout base:  <ROOT_DATA_DIR>/<bucket>/...
+#   dove <bucket> è:
+#     - sanitize(user_id)   in modalità 'isolated'
+#     - "_shared"           in modalità 'shared'
+# =============================================================================
 def user_dir(user_id: str) -> Path:
-    return ensure_dir(Path(ROOT_DATA_DIR) / sanitize_id(user_id, "user_id"))
+    return ensure_dir(Path(ROOT_DATA_DIR) / _tenant_bucket(user_id))
 
 def entities_dir(user_id: str) -> Path:
     return ensure_dir(user_dir(user_id) / "entities")
@@ -76,11 +112,11 @@ def contract_dir(user_id: str, entity_id: str, contract_id: str) -> Path:
 def contract_file(user_id: str, entity_id: str, contract_id: str) -> Path:
     return contract_dir(user_id, entity_id, contract_id) / "contract.json"
 
-# ============================================================================
+# =============================================================================
 # Titoli
 #   - Ogni titolo è un FILE: titles/<title_id>.json
 #   - Documenti in cartella condivisa: titles/documents/<doc_id>.json
-# ============================================================================
+# =============================================================================
 def titles_dir(user_id: str, entity_id: str, contract_id: str) -> Path:
     return ensure_dir(contract_dir(user_id, entity_id, contract_id) / "titles")
 
@@ -91,12 +127,12 @@ def title_docs_dir(user_id: str, entity_id: str, contract_id: str, title_id: str
     # cartella condivisa per TUTTI i titoli del contratto
     return ensure_dir(titles_dir(user_id, entity_id, contract_id) / "documents")
 
-# ============================================================================
+# =============================================================================
 # Sinistri
 #   - Ogni sinistro ha una CARTELLA: claims/<claim_id>/claim.json (+ diary)
 #   - Documenti in cartella condivisa: claims/documents/<doc_id>.json
 #     (l'associazione avviene con meta["claim_id"])
-# ============================================================================
+# =============================================================================
 def claims_dir(user_id: str, entity_id: str, contract_id: str) -> Path:
     return ensure_dir(contract_dir(user_id, entity_id, contract_id) / "claims")
 
@@ -118,17 +154,17 @@ def contract_docs_dir(user_id: str, entity_id: str, contract_id: str) -> Path:
 
 def claim_docs_dir(user_id: str, entity_id: str, contract_id: str, claim_id: str) -> Path:
     """
-    ⛳️ **Nuovo schema**: cartella condivisa per TUTTI i claim del contratto.
-    `claim_id` è ignorato qui (rimane nel signature per compatibilità).
+    ⛳️ Cartella condivisa per TUTTI i claim del contratto (claim_id ignorato).
+    Manteniamo la firma per compatibilità.
     """
     return ensure_dir(claims_dir(user_id, entity_id, contract_id) / "documents")
 
 def doc_meta_file(base_dir: Path, doc_id: str) -> Path:
     return ensure_dir(base_dir) / f"{sanitize_id(doc_id, 'doc_id')}.json"
 
-# ============================================================================
+# =============================================================================
 # Viste & indici
-# ============================================================================
+# =============================================================================
 def views_dir_for_entity(user_id: str, entity_id: str) -> Path:
     return ensure_dir(entity_dir(user_id, entity_id) / "views")
 
@@ -141,9 +177,9 @@ def by_policy_dir(user_id: str) -> Path:
 def due_dir(user_id: str) -> Path:
     return ensure_dir(indexes_dir(user_id) / "due")
 
-# ============================================================================
-# Blobstore deduplicato  users/<user_id>/blobs/ab/abcdef... (sha1)
-# ============================================================================
+# =============================================================================
+# Blobstore deduplicato: <bucket>/blobs/ab/abcdef... (sha1)
+# =============================================================================
 def blobs_dir(user_id: str) -> Path:
     return ensure_dir(user_dir(user_id) / "blobs")
 
@@ -154,7 +190,8 @@ def blob_path_for_hash(user_id: str, h: str) -> Path:
 
 def write_blob(user_id: str, content: bytes) -> tuple[str, str]:
     """
-    Scrive il blob se assente. Ritorna (sha1, path_relativo_da_user_dir).
+    Scrive il blob se assente. Ritorna (sha1, path_relativo_dal_bucket).
+    In modalità 'shared' tutti gli utenti condividono lo stesso bucket.
     """
     sha1 = hashlib.sha1(content).hexdigest()
     bp = blob_path_for_hash(user_id, sha1)
